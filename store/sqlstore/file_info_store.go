@@ -126,14 +126,24 @@ func (fs SqlFileInfoStore) Upsert(info *model.FileInfo) (*model.FileInfo, error)
 		return nil, err
 	}
 
-	n, err := fs.GetMaster().Update(info)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to update FileInfo")
+	query := fs.getQueryBuilder().
+		Insert("FileInfo").
+		Columns("Id", "CreatorId", "PostId", "CreateAt", "UpdateAt", "DeleteAt", "Path", "ThumbnailPath", "PreviewPath", "Name", "Extension", "Size", "MimeType", "Width", "Height", "HasPreviewImage", "MiniPreview", "Content", "RemoteId").
+		Values(info.Id, info.CreatorId, info.PostId, info.CreateAt, info.UpdateAt, info.DeleteAt, info.Path, info.ThumbnailPath, info.PreviewPath, info.Name, info.Extension, info.Size, info.MimeType, info.Width, info.Height, info.HasPreviewImage, info.MiniPreview, info.Content, info.RemoteId)
+
+	if fs.DriverName() == model.DATABASE_DRIVER_MYSQL {
+		query = query.SuffixExpr(sq.Expr("ON DUPLICATE KEY UPDATE CreatorId = ?, PostId = ?, CreateAt = ?, UpdateAt = ?, DeleteAt = ?, Path = ?, ThumbnailPath = ?, PreviewPath = ?, Name = ?, Extension = ?, Size = ?, MimeType = ?, Width = ?, Height = ?, HasPreviewImage = ?, MiniPreview = ?, Content = ?, RemoteId = ?", info.CreatorId, info.PostId, info.CreateAt, info.UpdateAt, info.DeleteAt, info.Path, info.ThumbnailPath, info.PreviewPath, info.Name, info.Extension, info.Size, info.MimeType, info.Width, info.Height, info.HasPreviewImage, info.MiniPreview, info.Content, info.RemoteId))
+	} else if fs.DriverName() == model.DATABASE_DRIVER_POSTGRES {
+		query = query.SuffixExpr(sq.Expr("ON CONFLICT (id) DO UPDATE SET CreatorId = ?, PostId = ?, CreateAt = ?, UpdateAt = ?, DeleteAt = ?, Path = ?, ThumbnailPath = ?, PreviewPath = ?, Name = ?, Extension = ?, Size = ?, MimeType = ?, Width = ?, Height = ?, HasPreviewImage = ?, MiniPreview = ?, Content = ?, RemoteId = ?", info.CreatorId, info.PostId, info.CreateAt, info.UpdateAt, info.DeleteAt, info.Path, info.ThumbnailPath, info.PreviewPath, info.Name, info.Extension, info.Size, info.MimeType, info.Width, info.Height, info.HasPreviewImage, info.MiniPreview, info.Content, info.RemoteId))
 	}
-	if n == 0 {
-		if err = fs.GetMaster().Insert(info); err != nil {
-			return nil, errors.Wrap(err, "failed to save FileInfo")
-		}
+
+	queryString, args, err := query.ToSql()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to generate sql query")
+	}
+
+	if _, err := fs.GetMaster().Exec(queryString, args); err != nil {
+		return nil, errors.Wrap(err, "failed to save FileInfo")
 	}
 	return info, nil
 }
