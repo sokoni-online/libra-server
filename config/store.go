@@ -7,10 +7,12 @@ import (
 	"encoding/json"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 
 	"github.com/mattermost/mattermost-server/v5/model"
+	"github.com/mattermost/mattermost-server/v5/shared/mlog"
 	"github.com/mattermost/mattermost-server/v5/utils/jsonutils"
 )
 
@@ -179,6 +181,8 @@ func (s *Store) Set(newCfg *model.Config) (*model.Config, *model.Config, error) 
 		return nil, nil, ErrReadOnlyStore
 	}
 
+	then := time.Now()
+
 	newCfg = newCfg.Clone()
 	oldCfg := s.config.Clone()
 	oldCfgNoEnv := s.configNoEnv
@@ -214,6 +218,7 @@ func (s *Store) Set(newCfg *model.Config) (*model.Config, *model.Config, error) 
 	if err := s.backingStore.Set(newCfgNoEnv); err != nil {
 		return nil, nil, errors.Wrap(err, "failed to persist")
 	}
+	mlog.Debug("time for backingStore.set", mlog.String("time", time.Since(then).String()))
 
 	// We apply back environment overrides since the input config may or
 	// may not have them applied.
@@ -245,6 +250,7 @@ func (s *Store) Set(newCfg *model.Config) (*model.Config, *model.Config, error) 
 		s.invokeConfigListeners(oldCfg, newCfgCopy.Clone())
 		s.configLock.Lock()
 	}
+	mlog.Debug("time for backingStore.set+listeners", mlog.String("time", time.Since(then).String()))
 
 	return oldCfg, newCfgCopy, nil
 }

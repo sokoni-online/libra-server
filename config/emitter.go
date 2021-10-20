@@ -4,7 +4,10 @@
 package config
 
 import (
+	"reflect"
+	"runtime"
 	"sync"
+	"time"
 
 	"github.com/mattermost/mattermost-server/v5/model"
 	"github.com/mattermost/mattermost-server/v5/shared/mlog"
@@ -34,7 +37,17 @@ func (e *emitter) RemoveListener(id string) {
 func (e *emitter) invokeConfigListeners(oldCfg, newCfg *model.Config) {
 	e.listeners.Range(func(key, value interface{}) bool {
 		listener := value.(Listener)
+		pc := reflect.ValueOf(listener).Pointer()
+		rFunc := runtime.FuncForPC(pc)
+		fName := rFunc.Name()
+		_, line := rFunc.FileLine(pc)
+		then := time.Now()
 		listener(oldCfg, newCfg)
+		mlog.Debug("Listener ran",
+			mlog.String("name", fName),
+			mlog.String("time", time.Since(then).String()),
+			mlog.Int("line", line),
+		)
 		return true
 	})
 }

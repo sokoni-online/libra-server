@@ -407,12 +407,14 @@ func (a *App) GetEnvironmentConfig(filter func(reflect.StructField) bool) map[st
 // SaveConfig replaces the active configuration, optionally notifying cluster peers.
 // It returns both the previous and current configs.
 func (s *Server) SaveConfig(newCfg *model.Config, sendConfigChangeClusterMessage bool) (*model.Config, *model.Config, *model.AppError) {
+	then := time.Now()
 	oldCfg, newCfg, err := s.configStore.Set(newCfg)
 	if errors.Cause(err) == config.ErrReadOnlyConfiguration {
 		return nil, nil, model.NewAppError("saveConfig", "ent.cluster.save_config.error", nil, err.Error(), http.StatusForbidden)
 	} else if err != nil {
 		return nil, nil, model.NewAppError("saveConfig", "app.save_config.app_error", nil, err.Error(), http.StatusInternalServerError)
 	}
+	mlog.Debug("time for configstore.set", mlog.String("time", time.Since(then).String()))
 
 	if s.startMetrics && *s.Config().MetricsSettings.Enable {
 		if s.Metrics != nil {
@@ -422,6 +424,7 @@ func (s *Server) SaveConfig(newCfg *model.Config, sendConfigChangeClusterMessage
 	} else {
 		s.StopMetricsServer()
 	}
+	mlog.Debug("time for configstore.set+metrics", mlog.String("time", time.Since(then).String()))
 
 	if s.Cluster != nil {
 		err := s.Cluster.ConfigChanged(s.configStore.RemoveEnvironmentOverrides(oldCfg),
@@ -430,6 +433,7 @@ func (s *Server) SaveConfig(newCfg *model.Config, sendConfigChangeClusterMessage
 			return nil, nil, err
 		}
 	}
+	mlog.Debug("time for configstore.set+metrics+cluster", mlog.String("time", time.Since(then).String()))
 
 	return oldCfg, newCfg, nil
 }
