@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/blang/semver"
 	svg "github.com/h2non/go-is-svg"
@@ -228,9 +229,14 @@ func (s *Server) initPlugins(c *request.Context, pluginDir, webappPluginDir stri
 	s.PluginConfigListenerId = s.AddConfigListener(func(old, new *model.Config) {
 		// If plugin status remains unchanged, only then run this.
 		// Because (*App).InitPlugins is already run as a config change hook.
+		then := time.Now()
 		if *old.PluginSettings.Enable == *new.PluginSettings.Enable {
 			s.installFeatureFlagPlugins()
+			mlog.Debug("time for installFeatureFlagPlugins",
+				mlog.String("time", time.Since(then).String()))
 			s.syncPluginsActiveState()
+			mlog.Debug("time for installFeatureFlagPlugins+syncPluginsActiveState",
+				mlog.String("time", time.Since(then).String()))
 		}
 		if pluginsEnvironment := s.GetPluginsEnvironment(); pluginsEnvironment != nil {
 			pluginsEnvironment.RunMultiPluginHook(func(hooks plugin.Hooks) bool {
@@ -240,6 +246,8 @@ func (s *Server) initPlugins(c *request.Context, pluginDir, webappPluginDir stri
 				return true
 			}, plugin.OnConfigurationChangeID)
 		}
+		mlog.Debug("time for installFeatureFlagPlugins+syncPluginsActiveState+confighook",
+			mlog.String("time", time.Since(then).String()))
 	})
 	s.PluginsLock.Unlock()
 
